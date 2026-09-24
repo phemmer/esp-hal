@@ -240,6 +240,19 @@ impl<'d> LowPower<'d> {
         let slept_ticks = crate::time::implem::us_to_ticks(slept_us);
 
         unsafe { crate::time::implem::update_counter(before_ticks + slept_ticks) };
+        // The next sleep's length will be counted on the RTC slow clock and
+        // converted with its calibrated period, so the period is calibrated
+        // against the crystal here, at every wake, rather than once at boot:
+        // the slow clock is an RC oscillator whose frequency moves with
+        // temperature and supply, and a period measured at boot leaves the
+        // system time drifting by a few tenths of a percent of every sleep
+        // thereafter. It is measured at the wake rather than at the sleep's
+        // entry because the oscillator is disturbed for a few milliseconds
+        // after a load such as the radio powers down, which is what a sleep
+        // tends to follow, and a period measured in that disturbance is off
+        // by several hundred parts per million for the whole sleep; at the
+        // wake nothing has run yet.
+        crate::clock::calibrate_rtc_slow_clock();
         sleep_uart_resume();
 
         run_exit_hooks();
